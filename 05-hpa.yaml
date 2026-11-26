@@ -1,0 +1,121 @@
+# ─────────────────────────────────────────────────────────────────────────
+# PULSEAI Horizontal Pod Autoscaler
+#
+# Scales the pulseai-app Deployment between 3 and 15 replicas based on CPU
+# and memory utilisation. The Claude API call inside run_pipeline() is
+# mostly I/O wait (network), so CPU alone under-counts real load — memory
+# is added as a second signal since each in-flight analysis holds metrics/
+# logs/commits data in memory for the duration of the Claude call.
+#
+# Requires the metrics-server addon to be installed in the cluster:
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+# ─────────────────────────────────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pulseai-app-hpa
+  namespace: pulseai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pulseai-app
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30     # react fast to incident bursts
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300    # scale down slowly to avoid flapping
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# Celery worker pool — scales independently from the API tier, since async
+# job processing load doesn't track 1:1 with HTTP request volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulseai-worker
+  namespace: pulseai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pulseai-worker
+  template:
+    metadata:
+      labels:
+        app: pulseai-worker
+    spec:
+      terminationGracePeriodSeconds: 95   # task_time_limit (120s) - margin
+      containers:
+        - name: pulseai-worker
+          image: pulseai:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "celery_worker", "worker", "--loglevel=info", "--concurrency=4"]
+          envFrom:
+            - configMapRef:
+                name: pulseai-config
+            - secretRef:
+                name: pulseai-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pulseai-worker-hpa
+  namespace: pulseai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pulseai-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120

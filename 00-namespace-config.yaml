@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pulseai
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pulseai-config
+  namespace: pulseai
+data:
+  # Non-secret configuration. Secrets (API keys, DB password) live in
+  # pulseai-secrets.yaml — never put real keys in a ConfigMap.
+  AWS_REGION: "ap-south-2"
+  CLOUDWATCH_LOG_GROUP: "/ecs/RootAi"
+  GITHUB_REPO: "abdullah7796/pulseai"
+  PULSEAI_ALLOWED_ORIGINS: "*"          # tighten to real domains before going live
+  GUNICORN_WORKERS: "4"
+  LOG_LEVEL: "info"
+  PROMETHEUS_MULTIPROC_DIR: "/tmp/pulseai_prom"

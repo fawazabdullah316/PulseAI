@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────
+# PULSEAI Prometheus scrape configuration
+#
+# Scrapes /metrics from the app service (round-robins across all 3
+# replicas via Docker's internal DNS / Kubernetes Service load balancing).
+# Grafana then reads from this Prometheus instance as its data source.
+# ─────────────────────────────────────────────────────────────────────────
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "pulseai-app"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: "pulseai"
+          env: "production"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

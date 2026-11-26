@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulseai-app
+  namespace: pulseai
+  labels:
+    app: pulseai-app
+spec:
+  replicas: 3                      # baseline — HPA scales this up/down
+  selector:
+    matchLabels:
+      app: pulseai-app
+  template:
+    metadata:
+      labels:
+        app: pulseai-app
+    spec:
+      # Give in-flight /analyse calls (up to ~60s) time to finish before
+      # the pod is killed during a scale-down or rolling update. This works
+      # together with pipeline.py's SIGTERM handler, which waits for
+      # _inflight_count to reach zero (up to 60s) before letting the
+      # process exit.
+      terminationGracePeriodSeconds: 75
+      containers:
+        - name: pulseai-app
+          image: pulseai:latest       # replace with your registry path, e.g. ghcr.io/abdullah7796/pulseai:v4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: pulseai-config
+            - secretRef:
+                name: pulseai-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulseai-app
+  namespace: pulseai
+spec:
+  selector:
+    app: pulseai-app
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP   # Ingress / cloud LoadBalancer sits in front of this

@@ -1,0 +1,90 @@
+{
+  "title": "PULSEAI — Production Overview",
+  "uid": "pulseai-overview",
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Analyses per minute (by confidence bucket)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(pulseai_analyses_total[5m])) by (confidence_bucket) * 60",
+          "legendFormat": "{{confidence_bucket}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "In-flight analyses (current)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "pulseai_inflight_analyses" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error rate (errors/min by type)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(pulseai_pipeline_errors_total[5m])) by (error_type) * 60",
+          "legendFormat": "{{error_type}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Pipeline duration — p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(pulseai_analysis_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(pulseai_analysis_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(pulseai_analysis_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Cache hit ratio",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(pulseai_cache_hits_total[15m])) / (sum(rate(pulseai_cache_hits_total[15m])) + sum(rate(pulseai_cache_misses_total[15m])))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "unit": "percentunit"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Total analyses (24h)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "targets": [
+        { "expr": "sum(increase(pulseai_analyses_total[24h]))" }
+      ]
+    }
+  ]
+}
